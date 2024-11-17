@@ -12,11 +12,7 @@ const (
 )
 
 type BlockChain struct {
-	LastHash []byte
-	Database *badger.DB
-}
-
-type BlockChainIterator struct {
+	LastHash    []byte
 	CurrentHash []byte
 	Database    *badger.DB
 }
@@ -56,28 +52,14 @@ func InitBlockChain() *BlockChain {
 
 	Handle(err)
 
-	blockchain := BlockChain{lastHash, db}
+	blockchain := BlockChain{LastHash: lastHash, CurrentHash: lastHash, Database: db}
 	return &blockchain
 }
 
 func (chain *BlockChain) AddBlock(data string) {
-	var lastHash []byte
+	newBlock := CreateBlock(data, chain.LastHash)
 
-	err := chain.Database.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte("lh"))
-		Handle(err)
-		err = item.Value(func(val []byte) error {
-			lastHash = val
-			return nil
-		})
-
-		return err
-	})
-	Handle(err)
-
-	newBlock := CreateBlock(data, lastHash)
-
-	err = chain.Database.Update(func(txn *badger.Txn) error {
+	err := chain.Database.Update(func(txn *badger.Txn) error {
 		err := txn.Set(newBlock.Hash, newBlock.Serialize())
 		Handle(err)
 		err = txn.Set([]byte("lh"), newBlock.Hash)
@@ -91,9 +73,9 @@ func (chain *BlockChain) AddBlock(data string) {
 
 func (chain *BlockChain) Iterator() iter.Seq[*Block] {
 	return func(yield func(*Block) bool) {
-		iter := &BlockChainIterator{chain.LastHash, chain.Database}
+		chain.CurrentHash = chain.LastHash
 		for {
-			block := iter.Next()
+			block := chain.Next()
 			if block == nil {
 				return
 			}
@@ -104,11 +86,11 @@ func (chain *BlockChain) Iterator() iter.Seq[*Block] {
 	}
 }
 
-func (iter *BlockChainIterator) Next() *Block {
+func (chain *BlockChain) Next() *Block {
 	var block *Block
 
-	err := iter.Database.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(iter.CurrentHash)
+	err := chain.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(chain.CurrentHash)
 		Handle(err)
 		err = item.Value(func(val []byte) error {
 			encodedBlock := val
@@ -120,7 +102,7 @@ func (iter *BlockChainIterator) Next() *Block {
 	})
 	Handle(err)
 
-	iter.CurrentHash = block.PrevHash
+	chain.CurrentHash = block.PrevHash
 
 	return block
 }
