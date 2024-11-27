@@ -2,7 +2,11 @@ module github.com/dqx0/blockchain
 
 go 1.23.0
 
-require github.com/dgraph-io/badger/v4 v4.4.0
+require (
+	github.com/btcsuite/btcutil v1.0.2
+	github.com/dgraph-io/badger/v4 v4.4.0
+	golang.org/x/crypto v0.29.0
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -16,6 +20,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.30.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 )

@@ -1,3 +1,4 @@
 tmp/blocks/*
+tmp/wallet.data
 .vscode/*
 !gitkeep
