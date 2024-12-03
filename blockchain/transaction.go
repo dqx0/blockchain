@@ -7,12 +7,37 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+
+	"github.com/dqx0/blockchain/wallet"
 )
 
 type Transaction struct {
 	ID      []byte     // トランザクションのID
 	Inputs  []TxInput  // 入力トランザクションのリスト
 	Outputs []TxOutput // 出力トランザクションのリスト
+}
+
+func (tx *Transaction) Hash() []byte {
+	var hash [32]byte
+
+	txCopy := *tx
+	txCopy.ID = []byte{}
+
+	hash = sha256.Sum256(txCopy.Serialize())
+
+	return hash[:]
+}
+
+func (tx Transaction) Serialize() []byte {
+	var encoded bytes.Buffer
+
+	enc := gob.NewEncoder(&encoded)
+	err := enc.Encode(tx)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return encoded.Bytes()
 }
 
 // トランザクションのハッシュIDを生成
@@ -40,10 +65,10 @@ func CoinbaseTx(to, data string) *Transaction {
 	}
 
 	// コインベーストランザクションは過去の参照を持たない特殊なインプット
-	txin := TxInput{[]byte{}, -1, data}
+	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
 	// 報酬として100コインを設定
-	txout := TxOutput{100, to}
-	tx := Transaction{nil, []TxInput{txin}, []TxOutput{txout}}
+	txout := NewTXOutput(100, to)
+	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}}
 	tx.SetID()
 
 	return &tx
@@ -59,8 +84,13 @@ func CoinbaseTx(to, data string) *Transaction {
 func NewTransaction(from, to string, amount int, bc *BlockChain) *Transaction {
 	var inputs []TxInput
 	var outputs []TxOutput
+
+	wallets, err := wallet.CreateWallets()
+	Handle(err)
+	w := wallets.GetWallet(from)
+	pubKeyHash := wallet.PublicKeyHash(w.PublicKey)
 	// 利用可能なUTXOを検索
-	acc, validOutputs := bc.FindSpendableOutputs(from, amount)
+	acc, validOutputs := bc.FindSpendableOutputs(pubKeyHash, amount)
 
 	if acc < amount {
 		log.Panic("Error: Not enough funds")
@@ -72,16 +102,16 @@ func NewTransaction(from, to string, amount int, bc *BlockChain) *Transaction {
 		Handle(err)
 
 		for _, out := range outs {
-			input := TxInput{txID, out, from}
+			input := TxInput{txID, out, nil, w.PublicKey}
 			inputs = append(inputs, input)
 		}
 	}
 
 	// 出力トランザクションの作成
-	outputs = append(outputs, TxOutput{amount, to})
+	outputs = append(outputs, *NewTXOutput(amount, to))
 	// おつりがある場合は送金元に返す
 	if acc > amount {
-		outputs = append(outputs, TxOutput{acc - amount, from})
+		outputs = append(outputs, *NewTXOutput(acc-amount, from))
 	}
 
 	tx := Transaction{nil, inputs, outputs}
